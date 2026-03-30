@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link href='https://fonts.googleapis.com/css?family=Open+Sans:400,300,300italic,400italic,600,600italic,700italic,700' rel='stylesheet' type='text/css'>
+  <title>Scratch Card</title>
+
+  <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.3/dist/confetti.browser.min.js"></script>
+
+  <style type="text/css">
+    html {
+      box-sizing: border-box;
+    }
+
+    *,
+    *:before,
+    *:after {
+      box-sizing: inherit;
+    }
+
+    body {
+      margin: 0;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+      background-color: #f0f0f0;
+    }
+
+    .sc__wrapper {
+      width: auto;
+      height: 100vh;
+      max-width: calc(100vh * (1080 / 1920));
+      aspect-ratio: 1080 / 1920;
+      border: 5px solid white;
+      position: relative;
+    }
+
+    .sc__container {
+      position: absolute;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+    }
+
+    .sc__container img {
+      position: absolute;
+      width: 100%;
+      height: 100%;
+      display: none;
+    }
+
+    .sc__container canvas {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+    }
+  </style>
+</head>
+
+<body>
+  <div class="sc__wrapper">
+    <div id="js--sc--container" class="sc__container">
+      <img id="backgroundImage" src="./images/back.jpeg" alt="Background Image">
+      <canvas id="scratchCanvas"></canvas>
+    </div>
+  </div>
+
+  <audio id="revealSound" preload="auto">
+    <source src="./sounds/win.mp3" type="audio/mpeg">
+  </audio>
+
+  <script type="text/javascript">
+    document.addEventListener('DOMContentLoaded', () => {
+      const canvas = document.getElementById('scratchCanvas');
+      const container = document.getElementById('js--sc--container');
+      const backgroundImage = document.getElementById('backgroundImage');
+      const revealSound = document.getElementById('revealSound');
+      const ctx = canvas.getContext('2d');
+
+      const devicePixelRatio = window.devicePixelRatio || 1;
+
+      const containerWidth = container.clientWidth * devicePixelRatio;
+      const containerHeight = container.clientHeight * devicePixelRatio;
+      canvas.width = containerWidth;
+      canvas.height = containerHeight;
+
+      const frontImage = new Image();
+      frontImage.src = './images/front.jpeg';
+
+      let isScratching = false;
+      let revealTriggered = false;
+      let blueScratchHits = 0;
+
+      /* Blue circle position on your design */
+      const blueCircle = {
+        x: 0.69,
+        y: 0.395,
+        radius: 0.12
+      };
+
+      frontImage.onload = () => {
+        ctx.drawImage(frontImage, 0, 0, containerWidth, containerHeight);
+        ctx.globalCompositeOperation = 'destination-out';
+
+        backgroundImage.style.display = 'block';
+
+        canvas.addEventListener('mousedown', startScratch);
+        canvas.addEventListener('touchstart', startScratch, { passive: false });
+
+        canvas.addEventListener('mouseup', endScratch);
+        canvas.addEventListener('mouseleave', endScratch);
+        canvas.addEventListener('touchend', endScratch);
+        canvas.addEventListener('touchcancel', endScratch);
+      };
+
+      function startScratch(event) {
+        event.preventDefault();
+        isScratching = true;
+        scratch(event);
+
+        canvas.addEventListener('mousemove', scratch);
+        canvas.addEventListener('touchmove', scratch, { passive: false });
+      }
+
+      function endScratch() {
+        isScratching = false;
+
+        canvas.removeEventListener('mousemove', scratch);
+        canvas.removeEventListener('touchmove', scratch);
+      }
+
+      function scratch(event) {
+        if (!isScratching) return;
+
+        event.preventDefault();
+
+        const rect = canvas.getBoundingClientRect();
+        const scale = devicePixelRatio;
+
+        let clientX, clientY;
+        if (event.touches) {
+          clientX = event.touches[0].clientX;
+          clientY = event.touches[0].clientY;
+        } else {
+          clientX = event.clientX;
+          clientY = event.clientY;
+        }
+
+        const x = (clientX - rect.left) * scale;
+        const y = (clientY - rect.top) * scale;
+
+        /* Original scratch brush */
+        ctx.beginPath();
+        ctx.arc(x, y, 8 * scale, 8, 7 * Math.PI);
+        ctx.fill();
+
+        checkBlueCircleHit(x, y);
+      }
+
+      function checkBlueCircleHit(x, y) {
+        if (revealTriggered) return;
+
+        const centerX = blueCircle.x * canvas.width;
+        const centerY = blueCircle.y * canvas.height;
+        const radius = blueCircle.radius * canvas.width;
+
+        const dx = x - centerX;
+        const dy = y - centerY;
+        const distance = Math.sqrt(dx * dx + dy * dy);
+
+        if (distance <= radius) {
+          blueScratchHits++;
+
+          /* Trigger after enough scratches inside blue circle */
+          if (blueScratchHits >= 165) {
+            revealTriggered = true;
+            triggerRevealEffects();
+          }
+        }
+      }
+
+      function triggerRevealEffects() {
+        revealSound.currentTime = 0;
+        revealSound.play().catch(() => {});
+
+        const rect = container.getBoundingClientRect();
+        const burstX = rect.left + (blueCircle.x * rect.width);
+        const burstY = rect.top + (blueCircle.y * rect.height);
+
+        confetti({
+          particleCount: 170,
+          spread: 75,
+          startVelocity: 45,
+          scalar: 1.05,
+          origin: {
+            x: burstX / window.innerWidth,
+            y: burstY / window.innerHeight
+          },
+          colors: [
+            '#e3f6ff',
+            '#cfeeff',
+            '#b8e5ff',
+            '#93d6ff',
+            '#6fc7ff'
+          ]
+        });
+
+        setTimeout(() => {
+          confetti({
+            particleCount: 90,
+            spread: 50,
+            startVelocity: 35,
+            scalar: 0.95,
+            origin: {
+              x: burstX / window.innerWidth,
+              y: burstY / window.innerHeight
+            },
+            colors: [
+              '#e3f6ff',
+              '#cfeeff',
+              '#b8e5ff',
+              '#93d6ff'
+            ]
+          });
+        }, 180);
+      }
+    });
+
+    window.addEventListener('resize', () => {
+      location.reload();
+    });
+  </script>
+</body>
+
+</html>
